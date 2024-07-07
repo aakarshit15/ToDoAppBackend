@@ -25,6 +25,7 @@ const db = new pg.Client({
 db.connect();
 
 app.use(bodyParser.urlencoded({extended: true}));
+app.use(express.json());
 app.use(session({
     secret: process.env.SESSION_SECRET_WORD,
     resave: "false",
@@ -40,8 +41,6 @@ passport.use(
     "local",
     new Strategy(
         async (username, password, cb) => {
-            // username = req.body.username;
-            // password = req.body.password;
             try {
                 const result1 = await db.query("SELECT * FROM users WHERE username = $1", [username]);
                 if(result1.rows.length === 0) {
@@ -69,37 +68,46 @@ passport.use(
 );
 
 passport.serializeUser((user, cb) => {
+    // console.log("Serialize");
+    // console.log(user);
+    // console.log(typeof(user));
     return cb(null, user);
 });
 
 passport.deserializeUser((user, cb) => {
+    // console.log("Deserialize");
+    // console.log(user);
     return cb(null, user);
 });
 
 app.post("/api/register", async (req, res) => {
-    try {
-        const result1 = await db.query("SELECT * FROM users WHERE username = $1", [req.body.username]);
-        if(result1.rows.length === 0) {
-            try {
-                bcrypt.hash(req.body.password, saltRounds, async (err, hash) => {
-                    if(err) {
-                        console.error(`Error hashing passwrod: ${err}`)
-                        res.json({registerationSuccessful: false, registerationMessage: err});
-                    } else {
-                        await db.query("INSERT INTO users (username, password, name) VALUES ($1, $2, $3)", [req.body.username, hash, req.body.name]);
-                        res.json({registerationSuccessful: true});
-                    }
-                });
-            } catch(err) {
-                console.error(`Error executing insert query: ${err}`);
-                res.json({registerationSuccessful: false, registerationMessage: err});
+    if(req.body.password1 === req.body.password2) {
+        try {
+            const result1 = await db.query("SELECT * FROM users WHERE username = $1", [req.body.username]);
+            if(result1.rows.length === 0) {
+                try {
+                    bcrypt.hash(req.body.password1, saltRounds, async (err, hash) => {
+                        if(err) {
+                            console.error(`Error hashing passwrod: ${err}`)
+                            res.json({registerationSuccessful: false, registerationMessage: err});
+                        } else {
+                            await db.query("INSERT INTO users (username, password, name) VALUES ($1, $2, $3)", [req.body.username, hash, req.body.name]);
+                            res.json({registerationSuccessful: true});
+                        }
+                    });
+                } catch(err) {
+                    console.error(`Error executing insert query: ${err}`);
+                    res.json({registerationSuccessful: false, registerationMessage: err});
+                }
+            } else {
+                res.json({registerationSuccessful: false, registerationMessage: "USER ALREADY EXITS!!!"});
             }
-        } else {
-            res.json({registerationSuccessful: false, registerationMessage: "USER ALREADY EXITS!!!"});
+        } catch (err) {
+            console.error(`Error executing search query: ${err}`);
+            res.json({registerationSuccessful: false, registerationMessage: err});
         }
-    } catch (err) {
-        console.error(`Error executing search query: ${err}`);
-        res.json({registerationSuccessful: false, registerationMessage: err});
+    } else {
+        res.json({registerationSuccessful: false});
     }
 });
 
@@ -111,8 +119,24 @@ app.post("/api/login", passport.authenticate(
     }
 ));
 
+app.post("/api/logout", (req, res) => {
+    req.logout((err) => {
+        if(err) {
+            console.error(`Error logging out ${err}`);
+        } else {
+            req.session.destroy(() => {
+                res.redirect("/api/login");
+            });
+        }
+    });
+});
+
 app.get("/api/dashboard", (req, res) => {
-    res.json({...req.user, isAuthenticated: req.isAuthenticated()});
+    if(req.user) {
+        res.json({...req.user, isAuthenticated: req.isAuthenticated()});
+    } else {
+        res.redirect('/api/login');
+    }
 });
 
 app.get("/api/login", (req, res) => {
