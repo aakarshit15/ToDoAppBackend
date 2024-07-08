@@ -6,6 +6,8 @@ import session from "express-session";
 import passport from "passport";
 import { Strategy } from "passport-local";
 import bcrypt from "bcrypt";
+import GoogleStrategy from "passport-google-oauth2";
+import cors from "cors";
 
 // Username: aakarshit2003
 // Password: 12345
@@ -26,6 +28,10 @@ db.connect();
 
 app.use(bodyParser.urlencoded({extended: true}));
 app.use(express.json());
+app.use(cors({
+    origin: "http://localhost:5173/",
+    optionsSuccessStatus: 200
+}));
 app.use(session({
     secret: process.env.SESSION_SECRET_WORD,
     resave: "false",
@@ -67,16 +73,42 @@ passport.use(
     )
 );
 
+passport.use(
+    "google",
+    new GoogleStrategy(
+        {
+            clientID: process.env.GOOGLE_OAUTH_CLIENT_ID,
+            clientSecret: process.env.GOOGLE_OAUTH_CLIENT_SECRET,
+            callbackURL: process.env.GOOGLE_OAUTH_CALLBACK_URL,
+            userProfileURL: process.env.GOOGLE_OAUTH_USER_PROFILE_URL
+        },
+        async (accessToken, refreshToken, profile, cb) => {
+            try{
+                const result1 = await db.query("SELECT * FROM users WHERE username = $1", [profile.email.split("@")[0]]);
+                if(result1.rows.length === 0) {
+                    try {
+                        const result2 = await db.query("INSERT INTO users (username, password, name) VALUES ($1, $2, $3) RETURNING *", [profile.email.split("@")[0], "google", profile.displayName]);
+                        return cb(null, result2.rows[0]);
+                    } catch (err2) {
+                        console.error(`Error inserting google profile details ${err1}`);
+                        return cb(err2, false);
+                    }
+                } else {
+                    return cb(null, result1.rows[0]);
+                }
+            } catch(err) {
+                console.log(`Error executing google strategy: ${err}`);
+                return cb(err, false);
+            }
+        }
+    )
+);
+
 passport.serializeUser((user, cb) => {
-    // console.log("Serialize");
-    // console.log(user);
-    // console.log(typeof(user));
     return cb(null, user);
 });
 
 passport.deserializeUser((user, cb) => {
-    // console.log("Deserialize");
-    // console.log(user);
     return cb(null, user);
 });
 
@@ -130,6 +162,22 @@ app.post("/api/logout", (req, res) => {
         }
     });
 });
+
+
+app.get("/api/auth/google", passport.authenticate(
+    "google",
+    {
+        scope: ["profile", "email"]
+    }
+));
+
+app.get("/auth/google/user", passport.authenticate(
+    "google",
+    {
+        successRedirect: "http://localhost:5173",
+        failureRedirect: "/api/login"
+    }
+));
 
 app.get("/api/dashboard", (req, res) => {
     if(req.user) {
