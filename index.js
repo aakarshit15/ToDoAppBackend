@@ -9,9 +9,6 @@ import bcrypt from "bcrypt";
 import GoogleStrategy from "passport-google-oauth2";
 import cors from "cors";
 
-// Username: aakarshit2003
-// Password: 12345
-
 env.config();
 
 const app = express();
@@ -84,6 +81,7 @@ passport.use(
         },
         async (accessToken, refreshToken, profile, cb) => {
             try{
+                console.log(profile);
                 const result1 = await db.query("SELECT * FROM users WHERE username = $1", [profile.email.split("@")[0]]);
                 if(result1.rows.length === 0) {
                     try {
@@ -162,7 +160,6 @@ app.post("/api/logout", (req, res) => {
         }
     });
 });
-
 
 app.get("/api/auth/google", passport.authenticate(
     "google",
