@@ -55,7 +55,9 @@ passport.use(
                             return cb(err2, false);
                         } else {
                             if(result) {
-                                return cb(null, result1.rows[0]);
+                                const user = result1.rows[0];
+                                delete user.password;
+                                return cb(null, user);
                             } else {
                                 return cb(null, false);
                             }
@@ -81,18 +83,21 @@ passport.use(
         },
         async (accessToken, refreshToken, profile, cb) => {
             try{
-                console.log(profile);
                 const result1 = await db.query("SELECT * FROM users WHERE username = $1", [profile.email.split("@")[0]]);
                 if(result1.rows.length === 0) {
                     try {
-                        const result2 = await db.query("INSERT INTO users (username, password, name) VALUES ($1, $2, $3) RETURNING *", [profile.email.split("@")[0], "google", profile.displayName]);
-                        return cb(null, result2.rows[0]);
+                        const result2 = await db.query("INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4) RETURNING *", [profile.email.split("@")[0], "google", profile.displayName, profile.email]);
+                        const user = result2.rows[0];
+                        delete user.password;
+                        return cb(null, user);
                     } catch (err2) {
                         console.error(`Error inserting google profile details ${err1}`);
                         return cb(err2, false);
                     }
                 } else {
-                    return cb(null, result1.rows[0]);
+                    const user = result1.rows[0];
+                    delete user.password;
+                    return cb(null, user);
                 }
             } catch(err) {
                 console.log(`Error executing google strategy: ${err}`);
@@ -121,7 +126,7 @@ app.post("/api/register", async (req, res) => {
                             console.error(`Error hashing passwrod: ${err}`)
                             res.json({registerationSuccessful: false, registerationMessage: err});
                         } else {
-                            await db.query("INSERT INTO users (username, password, name) VALUES ($1, $2, $3)", [req.body.username, hash, req.body.name]);
+                            await db.query("INSERT INTO users (username, password, name, email) VALUES ($1, $2, $3, $4)", [req.body.username, hash, req.body.name, req.body.email]);
                             res.json({registerationSuccessful: true});
                         }
                     });
