@@ -193,6 +193,74 @@ app.get("/api/login", (req, res) => {
     res.json({isAuthenticated: false});
 });
 
+app.post("/api/addTaskList", async (req, res) => {
+    if(req.user && req.user.isAuthenticated) {
+        try {
+            const result1 = await db.query("SELECT * FROM task_lists WHERE date = $1 && user_id = $2", [req.body.date, req.user.id]);
+            if(result1.rows.length === 0) {
+                try {
+                    await db.query("INSERT INTO task_lists (list_date, user_id) VALUES ($1, $2)", [req.body.list_date, req.user.id]);
+                    res.json({taskListMsg: `Task List with date ${req.body.date} added successfully`, taslListSuccess:true});
+                } catch (err2) {
+                    console.error(`Error executing task list inserting query: ${err2}`);
+                    res.json({taskListMsg: err2, taslListSuccess: false});
+                }
+            } else {
+                res.json({taskListMsg: `Task list with date ${req.body.date} already exits!!!`, taskListSuccess: false});
+            }
+        } catch (err1) {
+            console.error(`Error executing search query: ${err1}`);
+            res.json({taskListMsg: err1, taslListSuccess: false});
+
+        }
+    } else {
+        res.redirect("/api/login");
+    }
+});
+
+app.post("/api/addTask", async (req, res) => {
+    if(req.user && req.user.isAuthenticated) {
+        try {
+            await db.query("INSERT INTO tasks (task, task_list_id) VALUES ($1, $2)", [req.body.task, req.body.task_list_id]);
+            res.json({taskMsg: "Task added successfully!!!", taskSuccess: true});
+        } catch (err) {
+            console.error(`Error executing task inserting query ${err}`);
+            res.json({taskMsg:err ,taskSuccess: true});
+        }
+    } else {
+        res.redirect("/api/login");
+    }
+});
+
+app.post("/api/getTasks", async (req, res) => {
+    if(req.user && req.user.isAuthenticated) {
+        let allTasks = [];
+        try {
+            const listResult = await db.query("SELECT id, list_date FROM task_lists WHERE user_id = $1", [req.user.id]);
+            if(listResult.rows.length === 0) {
+                res.json({tasksList:[], getTasksMsg: "No tasks list present!!!", getTasksSuccess:true});
+            } else {
+                allTasks = [...listResult.rows]
+                try {
+                    allTasks.forEach(async (taskList) => {
+                        const taskResult = await db.query("SELECT id, task, done FROM tasks WHERE task_list_id = $1", [taskList.id]);
+                        taskList.tasks = taskResult.rows;
+                    });
+                    res.json({allTasks: allTasks, getTasksSuccess:true});
+                } catch (err2) {
+                    console.error(`Error searching tasks: ${err2}`);
+                    res.json({getTasksMsg: err2, getTasksSuccess:false});
+                }
+            }
+        } catch (err1) {
+            console.error(`Error searching task lists: ${err1}`);    
+            res.json({getTasksMsg: err1, getTasksSuccess:false});
+        }
+    } else {
+        res.redirect("/api/login");
+    }
+});
+
 app.listen(port, () => {
     console.log(`Listening on port ${port}`);
 });
