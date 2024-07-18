@@ -11,6 +11,8 @@ import cors from "cors";
 
 env.config();
 
+pg.types.setTypeParser(pg.types.builtins.DATE, value => value);
+
 const app = express();
 const port = parseInt(process.env.SERVER_PORT);
 const saltRounds = parseInt(process.env.SALT_ROUNDS);
@@ -219,9 +221,9 @@ app.post("/api/addTaskList", async (req, res) => {
 });
 
 app.post("/api/addTask", async (req, res) => {
-    if(req.user && req.user.isAuthenticated) {
+    if(req.user && req.isAuthenticated()) {
         try {
-            await db.query("INSERT INTO tasks (task, task_list_id) VALUES ($1, $2)", [req.body.task, req.body.task_list_id]);
+            await db.query("INSERT INTO tasks (title, task_list_id) VALUES ($1, $2)", [req.body.title, req.body.task_list_id]);
             res.json({taskMsg: "Task added successfully!!!", taskSuccess: true});
         } catch (err) {
             console.error(`Error executing task inserting query ${err}`);
@@ -232,21 +234,47 @@ app.post("/api/addTask", async (req, res) => {
     }
 });
 
+app.patch("/api/toggleDone", async (req, res) => {
+    if(req.user && req.isAuthenticated()) {
+        await db.query("UPDATE tasks SET done = $1 WHERE id = $2", [!(req.body.done), req.body.id]);
+        res.json({toggleDoneSuccess: true});
+    } else {
+        res.redirect("/api/login");
+    }
+});
+
+app.patch("/api/editTask", async (req, res) => {
+    if(req.user && req.isAuthenticated()) {
+        await db.query("UPDATE tasks SET title = $1 WHERE id = $2", [req.body.title, req.body.id]);
+        res.json({editTaskSuccess: true});
+    } else {
+        res.redirect("/api/login");
+    }
+});
+
+app.delete("/api/deleteTask/:id", async (req, res) => {
+    if(req.user && req.isAuthenticated) {
+        await db.query("DELETE FROM tasks WHERE id = $1", [req.params.id]);
+        res.json({deleteTaskSuccess: true});
+    } else {
+        res.redirect("/api/login");
+    }
+});
+
 app.post("/api/getTasks", async (req, res) => {
-    if(req.user && req.user.isAuthenticated) {
-        let allTasks = [];
+    if(req.user && req.isAuthenticated()) {
         try {
-            const listResult = await db.query("SELECT id, list_date FROM task_lists WHERE user_id = $1", [req.user.id]);
+            const listResult = await db.query("SELECT id, list_date FROM task_lists WHERE user_id = $1 ORDER BY list_date", [req.user.id]);
             if(listResult.rows.length === 0) {
                 res.json({tasksList:[], getTasksMsg: "No tasks list present!!!", getTasksSuccess:true});
             } else {
-                allTasks = [...listResult.rows]
+                let taskLists = [...listResult.rows]
                 try {
-                    allTasks.forEach(async (taskList) => {
-                        const taskResult = await db.query("SELECT id, task, done FROM tasks WHERE task_list_id = $1", [taskList.id]);
-                        taskList.tasks = taskResult.rows;
-                    });
-                    res.json({allTasks: allTasks, getTasksSuccess:true});
+                    for(let i=0; i<taskLists.length; i++) {
+                        const taskResult = await db.query("SELECT id, title, done FROM tasks WHERE task_list_id = $1 ORDER BY id", [taskLists[i].id]);
+                        taskLists[i].tasks = taskResult.rows;
+                    }
+                    res.json({taskLists: taskLists, getTasksSuccess:true});
                 } catch (err2) {
                     console.error(`Error searching tasks: ${err2}`);
                     res.json({getTasksMsg: err2, getTasksSuccess:false});

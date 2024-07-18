@@ -18,7 +18,7 @@ CREATE TABLE task_lists (
 -- tasks table
 create table tasks (
 	id serial primary key,
-	task text not null,
+	title text not null,
 	done boolean not null default '0',
 	task_list_id integer not null,
 	foreign key (task_list_id) references task_lists(id)
