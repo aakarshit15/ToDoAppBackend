@@ -196,13 +196,13 @@ app.get("/api/login", (req, res) => {
 });
 
 app.post("/api/addTaskList", async (req, res) => {
-    if(req.user && req.user.isAuthenticated) {
+    if(req.user && req.isAuthenticated()) {
         try {
-            const result1 = await db.query("SELECT * FROM task_lists WHERE date = $1 && user_id = $2", [req.body.date, req.user.id]);
+            const result1 = await db.query("SELECT * FROM task_lists WHERE list_date = $1 AND user_id = $2", [req.body.list_date, req.user.id]);
             if(result1.rows.length === 0) {
                 try {
                     await db.query("INSERT INTO task_lists (list_date, user_id) VALUES ($1, $2)", [req.body.list_date, req.user.id]);
-                    res.json({taskListMsg: `Task List with date ${req.body.date} added successfully`, taslListSuccess:true});
+                    res.json({taskListMsg: `Task List with date ${req.body.list_date} added successfully`, taskListSuccess:true});
                 } catch (err2) {
                     console.error(`Error executing task list inserting query: ${err2}`);
                     res.json({taskListMsg: err2, taslListSuccess: false});
